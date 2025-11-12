@@ -45,61 +45,50 @@ async def get_chapter_content(session, book_id, chapter_id, book_title, chapter_
     log_json(book_id, book_title, chapter_id, chapter_title, "success", f"Đã crawl {len(paragraphs)} đoạn")
     return content
 
-async def crawl_books_and_chapters_async(page=1, book_limit=5, chapter_limit=5):
+async def crawl_books_and_chapters_async():
     all_books = []
     book_api = "https://www.qimao.com/qimaoapi/api/classify/book-list"
-    params = {
-        "channel": "a",
-        "category1": "a",
-        "category2": "a",
-        "words": "a",
-        "update_time": "a",
-        "is_vip": "a",
-        "is_over": "a",
-        "order": "click",
-        "page": page
-    }
+    params = {"channel":"a","category1":"a","category2":"a","words":"a",
+              "update_time":"a","is_vip":"a","is_over":"a","order":"click","page":1}
 
     async with aiohttp.ClientSession() as session:
         async with session.get(book_api, params=params) as resp:
             data = await resp.json()
-    books = data.get("data", {}).get("book_list", [])[:book_limit]
+    books = data.get("data", {}).get("book_list", [])[:5]
 
     async with aiohttp.ClientSession() as session:
         for book in books:
             book_data = {
-                "book_id": book["book_id"],
-                "title": book["title"],
-                "category": book.get("category2_name", ""),
-                "intro": book.get("description", ""),
-                "images": book.get("cover_image", ""),
-                "author": book.get("author", ""),
-                "chapters": [],
+                "book_id": book['book_id'],
+                "title": book['title'],
+                "category": book.get('category2_name',''),
+                "description": book.get('intro',''),
+                "image_cover": book.get('image_link',''),
+                "author": book.get('author',''),
+                "chapters":[]
             }
 
-            # Lấy danh sách chương
+            # Lấy 5 chương
             chapter_api = f"https://www.qimao.com/qimaoapi/api/book/chapter-list?book_id={book['book_id']}"
             async with session.get(chapter_api) as resp:
                 chapters_resp = await resp.json()
-            chapters = chapters_resp.get("data", {}).get("chapters", [])[:chapter_limit]
+            chapters = chapters_resp.get("data", {}).get("chapters", [])[:5]
 
-            # Crawl nội dung chương song song
+            # Crawl tất cả chương song song nhưng giới hạn concurrency
             semaphore = asyncio.Semaphore(MAX_CONCURRENT)
             async def crawl_with_sem(ch):
                 async with semaphore:
-                    return ch, await get_chapter_content(
-                        session, book["book_id"], ch["id"], book["title"], ch["title"]
-                    )
+                    return ch, await get_chapter_content(session, book['book_id'], ch['id'], book['title'], ch['title'])
 
             tasks = [crawl_with_sem(ch) for ch in chapters]
             results = await asyncio.gather(*tasks)
 
             for ch, content in results:
-                book_data["chapters"].append({
-                    "id": ch["id"],
-                    "title": ch["title"],
-                    "words": ch["words"],
-                    "is_vip": ch["is_vip"],
+                book_data['chapters'].append({
+                    "id": ch['id'],
+                    "title": ch['title'],
+                    "words": ch['words'],
+                    "is_vip": ch['is_vip'],
                     "content": content
                 })
 
@@ -113,16 +102,20 @@ def home():
 
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
-    # Cho phép nhập page, book_limit, chapter_limit qua query string
-    page = int(request.args.get("page", 1))
-    book_limit = int(request.args.get("book_limit", 5))
-    chapter_limit = int(request.args.get("chapter_limit", 5))
+    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message":"=== Bắt đầu crawl 5 truyện x 5 chương ==="})
+    data = asyncio.run(crawl_books_and_chapters_async())
+    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message":"=== Kết thúc crawl ==="})
 
-    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-           "message": f"=== Bắt đầu crawl page={page}, {book_limit} truyện x {chapter_limit} chương ==="})
-    data = asyncio.run(crawl_books_and_chapters_async(page, book_limit, chapter_limit))
-    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message": "=== Kết thúc crawl ==="})
-    return jsonify(data)
+    # Tính tổng số chương
+    total_chapters = sum(len(book['chapters']) for book in data)
+    
+    response = {
+        "status": "success",
+        "total_books": len(data),
+        "total_chapters": total_chapters,
+        "result": data
+    }
+    return jsonify(response)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
