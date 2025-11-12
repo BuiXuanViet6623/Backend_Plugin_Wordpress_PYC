@@ -63,7 +63,8 @@ async def crawl_books_and_chapters_async(page=1, num_chapters=1):
     async with aiohttp.ClientSession() as session:
         async with session.get(book_api, params=params) as resp:
             data = await resp.json()
-    books = data.get("data", {}).get("book_list", [])[:1]  # luôn lấy 1 truyện
+    books = data.get("data", {}).get("book_list", [])
+    print(f"==> Crawl {len(books)} truyện trong page {page}")
 
     async with aiohttp.ClientSession() as session:
         for book in books:
@@ -83,25 +84,23 @@ async def crawl_books_and_chapters_async(page=1, num_chapters=1):
                 chapters_resp = await resp.json()
             chapters = chapters_resp.get("data", {}).get("chapters", [])[:num_chapters]
 
-            # Crawl nội dung chương song song
+            # Crawl nội dung chương song song (giới hạn MAX_CONCURRENT)
             semaphore = asyncio.Semaphore(MAX_CONCURRENT)
             async def crawl_with_sem(ch):
                 async with semaphore:
-                    return ch, await get_chapter_content(
+                    content = await get_chapter_content(
                         session, book["book_id"], ch["id"], book["title"], ch["title"]
                     )
+                    return {
+                        "id": ch["id"],
+                        "title": ch["title"],
+                        "words": ch["words"],
+                        "is_vip": ch["is_vip"],
+                        "content": content
+                    }
 
             tasks = [crawl_with_sem(ch) for ch in chapters]
-            results = await asyncio.gather(*tasks)
-
-            for ch, content in results:
-                book_data["chapters"].append({
-                    "id": ch["id"],
-                    "title": ch["title"],
-                    "words": ch["words"],
-                    "is_vip": ch["is_vip"],
-                    "content": content
-                })
+            book_data["chapters"] = await asyncio.gather(*tasks)
 
             all_books.append(book_data)
 
@@ -114,11 +113,11 @@ def home():
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
     page = int(request.args.get("page", 1))
-    num_chapters = int(request.args.get("num_chapters", 1))  # chỉ dùng param này
+    num_chapters = int(request.args.get("num_chapters", 1))
 
     print({
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "message": f"=== Bắt đầu crawl page={page}, {num_chapters} chương ==="
+        "message": f"=== Bắt đầu crawl page={page}, mỗi truyện {num_chapters} chương ==="
     })
     data = asyncio.run(crawl_books_and_chapters_async(page, num_chapters))
     print({
