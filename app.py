@@ -48,8 +48,12 @@ async def get_chapter_content(session, book_id, chapter_id, book_title, chapter_
 async def crawl_books_and_chapters_async():
     all_books = []
     book_api = "https://www.qimao.com/qimaoapi/api/classify/book-list"
-    params = {"channel":"a","category1":"a","category2":"a","words":"a",
-              "update_time":"a","is_vip":"a","is_over":"a","order":"click","page":1}
+   page = int(request.args.get('page', 1))
+params = {
+    "channel":"a","category1":"a","category2":"a","words":"a",
+    "update_time":"a","is_vip":"a","is_over":"a","order":"click",
+    "page": page
+}
 
     async with aiohttp.ClientSession() as session:
         async with session.get(book_api, params=params) as resp:
