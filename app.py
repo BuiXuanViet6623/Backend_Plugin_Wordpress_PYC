@@ -45,22 +45,26 @@ async def get_chapter_content(session, book_id, chapter_id, book_title, chapter_
     log_json(book_id, book_title, chapter_id, chapter_title, "success", f"Đã crawl {len(paragraphs)} đoạn")
     return content
 
-async def crawl_books_and_chapters_async():
+async def crawl_books_and_chapters_async(page, num_chapters):
     all_books = []
     book_api = "https://www.qimao.com/qimaoapi/api/classify/book-list"
-   page = int(request.args.get('page', 1))
-params = {
-    "channel":"a","category1":"a","category2":"a","words":"a",
-    "update_time":"a","is_vip":"a","is_over":"a","order":"click",
-    "page": page
-}
+    params = {
+        "channel": "a",
+        "category1": "a",
+        "category2": "a",
+        "words": "a",
+        "update_time": "a",
+        "is_vip": "a",
+        "is_over": "a",
+        "order": "click",
+        "page": page
+    }
 
     async with aiohttp.ClientSession() as session:
         async with session.get(book_api, params=params) as resp:
             data = await resp.json()
-    books = data.get("data", {}).get("book_list", [])[:5]
 
-    async with aiohttp.ClientSession() as session:
+        books = data.get("data", {}).get("book_list", [])
         for book in books:
             book_data = {
                 "book_id": book['book_id'],
@@ -69,20 +73,20 @@ params = {
                 "description": book.get('intro',''),
                 "cover_image": book.get('image_link',''),
                 "author": book.get('author',''),
-                "chapters":[]
+                "chapters": []
             }
 
-            # Lấy 5 chương
+            # Lấy số chương theo num_chapters
             chapter_api = f"https://www.qimao.com/qimaoapi/api/book/chapter-list?book_id={book['book_id']}"
-            async with session.get(chapter_api) as resp:
-                chapters_resp = await resp.json()
-            chapters = chapters_resp.get("data", {}).get("chapters", [])[:5]
+            async with session.get(chapter_api) as resp_ch:
+                chapters_resp = await resp_ch.json()
+            chapters = chapters_resp.get("data", {}).get("chapters", [])[:num_chapters]
 
-            # Crawl tất cả chương song song nhưng giới hạn concurrency
             semaphore = asyncio.Semaphore(MAX_CONCURRENT)
             async def crawl_with_sem(ch):
                 async with semaphore:
-                    return ch, await get_chapter_content(session, book['book_id'], ch['id'], book['title'], ch['title'])
+                    content = await get_chapter_content(session, book['book_id'], ch['id'], book['title'], ch['title'])
+                    return ch, content
 
             tasks = [crawl_with_sem(ch) for ch in chapters]
             results = await asyncio.gather(*tasks)
@@ -106,33 +110,34 @@ def home():
 
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
-    # Lấy param từ query string
-    page = int(request.args.get("page", 1))
-    num_chapters = int(request.args.get("num_chapters", 5))
+    # Bắt buộc phải truyền page và num_chapters
+    page = request.args.get("pages")
+    num_chapters = request.args.get("chapters")
+    if page is None or num_chapters is None:
+        return jsonify({"error": "Missing required parameters 'page' and 'num_chapters'"}), 400
+
+    try:
+        page = int(page)
+        num_chapters = int(num_chapters)
+    except ValueError:
+        return jsonify({"error": "Parameters 'page' and 'num_chapters' must be integers"}), 400
 
     # Chạy async function với param
     data = asyncio.run(crawl_books_and_chapters_async(page, num_chapters))
 
-    # Chuẩn hóa JSON cho plugin
+    # Chuẩn hóa JSON
     results = []
     for book in data:
         results.append({
             "title": book['title'],
             "author": book['author'],
-            "cover_image": book.get('cover_image', ''),  # đúng key rồi
+            "cover_image": book.get('cover_image', ''),
             "description": book.get('description', ''),
             "genres": [book.get('category', '')],
-            "chapters": [
-                {
-                    "title": ch['title'],
-                    "content": ch['content']
-                } for ch in book['chapters']
-            ]
+            "chapters": [{"title": ch['title'], "content": ch['content']} for ch in book['chapters']]
         })
 
     return jsonify({"results": results})
-
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
