@@ -45,7 +45,7 @@ async def get_chapter_content(session, book_id, chapter_id, book_title, chapter_
     log_json(book_id, book_title, chapter_id, chapter_title, "success", f"Đã crawl {len(paragraphs)} đoạn")
     return content
 
-async def crawl_books_and_chapters_async(page=1, book_limit=5, chapter_limit=5):
+async def crawl_books_and_chapters_async(page=1, num_chapters=1):
     all_books = []
     book_api = "https://www.qimao.com/qimaoapi/api/classify/book-list"
     params = {
@@ -63,7 +63,7 @@ async def crawl_books_and_chapters_async(page=1, book_limit=5, chapter_limit=5):
     async with aiohttp.ClientSession() as session:
         async with session.get(book_api, params=params) as resp:
             data = await resp.json()
-    books = data.get("data", {}).get("book_list", [])[:book_limit]
+    books = data.get("data", {}).get("book_list", [])[:1]  # luôn lấy 1 truyện
 
     async with aiohttp.ClientSession() as session:
         for book in books:
@@ -71,8 +71,8 @@ async def crawl_books_and_chapters_async(page=1, book_limit=5, chapter_limit=5):
                 "book_id": book["book_id"],
                 "title": book["title"],
                 "category": book.get("category2_name", ""),
-                "intro": book.get("intro", ""),
-                "image_link": book.get("image_link", ""),
+                "description": book.get("intro", ""),
+                "cover_image": book.get("image_link", ""),
                 "author": book.get("author", ""),
                 "chapters": [],
             }
@@ -81,7 +81,7 @@ async def crawl_books_and_chapters_async(page=1, book_limit=5, chapter_limit=5):
             chapter_api = f"https://www.qimao.com/qimaoapi/api/book/chapter-list?book_id={book['book_id']}"
             async with session.get(chapter_api) as resp:
                 chapters_resp = await resp.json()
-            chapters = chapters_resp.get("data", {}).get("chapters", [])[:chapter_limit]
+            chapters = chapters_resp.get("data", {}).get("chapters", [])[:num_chapters]
 
             # Crawl nội dung chương song song
             semaphore = asyncio.Semaphore(MAX_CONCURRENT)
@@ -113,15 +113,18 @@ def home():
 
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
-    # Cho phép nhập page, book_limit, chapter_limit qua query string
     page = int(request.args.get("page", 1))
-    book_limit = int(request.args.get("book_limit", 5))
-    chapter_limit = int(request.args.get("chapter_limit", 5))
+    num_chapters = int(request.args.get("num_chapters", 1))  # chỉ dùng param này
 
-    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-           "message": f"=== Bắt đầu crawl page={page}, {book_limit} truyện x {chapter_limit} chương ==="})
-    data = asyncio.run(crawl_books_and_chapters_async(page, book_limit, chapter_limit))
-    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message": "=== Kết thúc crawl ==="})
+    print({
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": f"=== Bắt đầu crawl page={page}, {num_chapters} chương ==="
+    })
+    data = asyncio.run(crawl_books_and_chapters_async(page, num_chapters))
+    print({
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "message": "=== Kết thúc crawl ==="
+    })
     return jsonify(data)
 
 if __name__ == "__main__":
