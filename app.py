@@ -106,27 +106,32 @@ def home():
 
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
-    data = asyncio.run(crawl_books_and_chapters_async())
+    # Lấy param từ query string
+    page = int(request.args.get("page", 1))
+    num_chapters = int(request.args.get("num_chapters", 5))
+
+    # Chạy async function với param
+    data = asyncio.run(crawl_books_and_chapters_async(page, num_chapters))
 
     # Chuẩn hóa JSON cho plugin
     results = []
     for book in data:
         results.append({
-    "title": book['title'],
-    "author": book['author'],
-    "cover_image": book.get('cover_image',''),  # đúng key rồi
-    "description": book.get('description',''),
-    "genres": [book.get('category','')],
-    "chapters": [
-        {
-            "title": ch['title'],
-            "content": ch['content']
-        } for ch in book['chapters']
-    ]
-})
-
+            "title": book['title'],
+            "author": book['author'],
+            "cover_image": book.get('cover_image', ''),  # đúng key rồi
+            "description": book.get('description', ''),
+            "genres": [book.get('category', '')],
+            "chapters": [
+                {
+                    "title": ch['title'],
+                    "content": ch['content']
+                } for ch in book['chapters']
+            ]
+        })
 
     return jsonify({"results": results})
+
 
 
 if __name__ == "__main__":
