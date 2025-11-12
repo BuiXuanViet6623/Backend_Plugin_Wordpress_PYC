@@ -102,20 +102,27 @@ def home():
 
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
-    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message":"=== Bắt đầu crawl 5 truyện x 5 chương ==="})
     data = asyncio.run(crawl_books_and_chapters_async())
-    print({"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "message":"=== Kết thúc crawl ==="})
 
-    # Tính tổng số chương
-    total_chapters = sum(len(book['chapters']) for book in data)
-    
-    response = {
-        "status": "success",
-        "total_books": len(data),
-        "total_chapters": total_chapters,
-        "results": data
-    }
-    return jsonify(response)
+    # Chuẩn hóa JSON cho plugin
+    results = []
+    for book in data:
+        results.append({
+            "title": book['title'],
+            "author": book['author'],
+            "cover_image": book.get('image_cover',''),
+            "description": book.get('description',''),
+            "genres": [book.get('category','')],
+            "chapters": [
+                {
+                    "title": ch['title'],
+                    "content": ch['content']
+                } for ch in book['chapters']
+            ]
+        })
+
+    return jsonify({"results": results})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
