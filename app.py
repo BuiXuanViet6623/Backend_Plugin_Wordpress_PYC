@@ -113,7 +113,7 @@ def crawl_api():
         "status": "success",
         "total_books": len(data),
         "total_chapters": total_chapters,
-        "result": data
+        "results": data
     }
     return jsonify(response)
 
