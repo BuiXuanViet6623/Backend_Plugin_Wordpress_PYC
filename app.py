@@ -106,10 +106,6 @@ async def crawl_books_and_chapters_async(page=1, num_chapters=1):
 
     return all_books
 
-@app.route("/", methods=["GET"])
-def home():
-    return "API Running"
-
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
     page = int(request.args.get("page", 1))
@@ -124,7 +120,14 @@ def crawl_api():
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "message": "=== Kết thúc crawl ==="
     })
-    return jsonify(data)
+
+    # --- Wrap kết quả vào results ---
+    response = {
+        "errors": [],
+        "results": data
+    }
+    return jsonify(response)
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
