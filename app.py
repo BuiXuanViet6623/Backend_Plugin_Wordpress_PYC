@@ -95,8 +95,8 @@ async def crawl_books_and_chapters_async(page, num_chapters):
                 book_data['chapters'].append({
                     "id": ch['id'],
                     "title": ch['title'],
-                    "words": ch['words'],
-                    "is_vip": ch['is_vip'],
+                    "words": ch.get('words',0),
+                    "is_vip": ch.get('is_vip',0),
                     "content": content
                 })
 
@@ -110,9 +110,9 @@ def home():
 
 @app.route("/crawl", methods=["GET"])
 def crawl_api():
-    # Bắt buộc phải truyền page và num_chapters
-    page = request.args.get("pages")
-    num_chapters = request.args.get("chapters")
+    # Plugin PHP bắt buộc truyền page và num_chapters
+    page = request.args.get("page")
+    num_chapters = request.args.get("num_chapters")
     if page is None or num_chapters is None:
         return jsonify({"error": "Missing required parameters 'page' and 'num_chapters'"}), 400
 
@@ -122,10 +122,9 @@ def crawl_api():
     except ValueError:
         return jsonify({"error": "Parameters 'page' and 'num_chapters' must be integers"}), 400
 
-    # Chạy async function với param
     data = asyncio.run(crawl_books_and_chapters_async(page, num_chapters))
 
-    # Chuẩn hóa JSON
+    # Chuẩn hóa JSON cho plugin
     results = []
     for book in data:
         results.append({
@@ -133,7 +132,7 @@ def crawl_api():
             "author": book['author'],
             "cover_image": book.get('cover_image', ''),
             "description": book.get('description', ''),
-            "genres": [book.get('category', '')],
+            "genres": [book.get('category','')],
             "chapters": [{"title": ch['title'], "content": ch['content']} for ch in book['chapters']]
         })
 
