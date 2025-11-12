@@ -63,7 +63,7 @@ async def crawl_books_and_chapters_async():
                 "title": book['title'],
                 "category": book.get('category2_name',''),
                 "description": book.get('intro',''),
-                "image_cover": book.get('image_link',''),
+                "cover_image": book.get('image_link',''),
                 "author": book.get('author',''),
                 "chapters":[]
             }
