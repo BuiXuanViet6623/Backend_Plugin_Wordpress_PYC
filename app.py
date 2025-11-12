@@ -108,18 +108,19 @@ def crawl_api():
     results = []
     for book in data:
         results.append({
-            "title": book['title'],
-            "author": book['author'],
-            "cover_image": book.get('image_cover',''),
-            "description": book.get('description',''),
-            "genres": [book.get('category','')],
-            "chapters": [
-                {
-                    "title": ch['title'],
-                    "content": ch['content']
-                } for ch in book['chapters']
-            ]
-        })
+    "title": book['title'],
+    "author": book['author'],
+    "cover_image": book.get('cover_image',''),  # đúng key rồi
+    "description": book.get('description',''),
+    "genres": [book.get('category','')],
+    "chapters": [
+        {
+            "title": ch['title'],
+            "content": ch['content']
+        } for ch in book['chapters']
+    ]
+})
+
 
     return jsonify({"results": results})
 
